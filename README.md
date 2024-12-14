@@ -1,5 +1,7 @@
 # Debiasing CLIP: Interpreting and Correcting Bias in Attention Heads
 
+![Alt text](images/overall.png)
+
 This work is adapted from **Interpreting CLIP's Image Representation via Text-Based Decomposition** https://github.com/yossigandelsman/clip_text_span
 
 The models supported are `ViT-B-16, ViT-L-14 and ViT-H-14`, datasets: `binary_waterbirds, genderbias, fairface and counteranimal`. Use this in the arguments below.
@@ -47,6 +49,9 @@ python main_gender.py --dataset genderbias --model ViT-B-16
 ```
 
 # Visualization 
+
+![Alt text](images/viz.png)
+
 For Text, run:
 ```python
 python viz_text.py --dataset genderbias --model ViT-B-16
