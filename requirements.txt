@@ -1,0 +1,14 @@
+torch==2.4.0
+torchvision>=0.19.0
+open_clip_torch==2.23.0
+transformers==4.44.2
+openai==1.47.0
+numpy
+timm
+einops
+ftfy
+scikit-learn
+matplotlib
+seaborn
+pandas
+vllm
