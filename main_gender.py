@@ -213,8 +213,8 @@ def plot_occupations(diff_results,model_name):
 
 
 biased_gender_cls_heads = {
-                    'ViT-B-16':[(11, 4)],
-                    'ViT-L-14':[(23,4)],
+                    'ViT-B-16':[(11, 4),(11,7)],
+                    'ViT-L-14':[(23,4),(23,6)],
                     'ViT-H-14': [(31, 7), (31, 12), (29, 11), (30, 7)]
                 }
 
@@ -300,12 +300,10 @@ def main():
 
         ablate_heads = get_impt_heads(total_c,total_w)
         impt_heads = get_impt_heads(total_w,total_c)
-        logger.info(f'Contrastive heads: {ablate_heads}')
-        logger.info(f'Classification heads: {impt_heads}')
         
         ## TEST
         t_attns,t_mlps,t_classifier,t_labels,t_classifier_ids,t_gender_label,t_occ_label = load_gender_ds(args.dataset,args.model,input_dir,test=True)
-        all_layer_heads = [(layer,head) for layer in range(t_attns.shape[1]) for head in range(attns.shape[2])] # to select for random
+        all_layer_heads = [(layer,head) for layer in range(attns.shape[1]-4,attns.shape[1]) for head in range(attns.shape[2])]
 
         classifier_grp_pos = sort_by_classifier(t_classifier_ids)
         

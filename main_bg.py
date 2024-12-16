@@ -270,15 +270,11 @@ def main():
         
         ## Finding the cls bis heads
         bias_head_pos = get_impt_heads(gn_correct,gn_wrong)
-        logger.info(f'Biased heads: {bias_head_pos}')
         impt_head_pos = get_impt_heads(gn_wrong,gn_correct)
-        logger.info(f'Unbiased heads: {impt_head_pos}')
         plot_heatmap({'correct':gn_correct.numpy(),'wrong':gn_wrong.numpy()},f'test_imgs/importance/{args.model}_{args.dataset}.png',heads_from = plot_layers[args.model])
 
         full_bias = get_impt_heads(full_correct,full_wrong)
-        logger.info(f'Full Biased heads: {full_bias}')
         full_impt = get_impt_heads(full_wrong,full_correct)
-        logger.info(f'Full Unbiased heads: {full_impt}')
         plot_heatmap({'correct':full_correct.numpy(),'wrong':full_wrong.numpy()},f'test_imgs/importance/{args.model}_{args.dataset}_full.png',heads_from = plot_layers[args.model])
 
 
