@@ -6,9 +6,7 @@ dataset/multicls_ds.py
 dataset/place365.py
 FC
 output_dir/binary_waterbirds
-output_dir/counteranimal
 output_dir/fairface
-output_dir/genderbias
 results
 scripts
 test_imgs

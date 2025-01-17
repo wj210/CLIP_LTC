@@ -122,15 +122,15 @@ def get_alternative_class(attns,mlps,classifier,labels):
         logit = (a.sum(dim=(0,1)) + m.sum(dim=0)) @ classifier
         if logit.argmax() != l:
             alternative[l.item()][logit.argmax().item()] += 1
-    out = {}
+    top_misclassified = {}
     for k,v in alternative.items():
-        out[imagenet_classes[k]] = imagenet_classes[sorted(v.items(),key = lambda x:x[1],reverse=True)[0][0]]
-    return out
+        top_misclassified[imagenet_classes[k]] = imagenet_classes[sorted(v.items(),key = lambda x:x[1],reverse=True)[0][0]]
+    return top_misclassified,alternative # top_misclassified is the mapping from label (45 class) to top mis-classified class (to reduce num of text feature combinations to 45 at most.) (str:str) alternative is the full nested dict keeping track of the counts. (int:int)
         
 def sort_by_label(labels):
     classifier_grp = defaultdict(list)
     for sample_pos,l in enumerate(labels):
-        classifier_grp[l.item()].append(sample_pos)
+        classifier_grp[l].append(sample_pos)
     return classifier_grp
 
 def get_unique_class_mapping(cls_mapping):
@@ -144,36 +144,79 @@ def get_unique_class_mapping(cls_mapping):
         existing_pairs.append((k,v))
     return unique_cls_mapping
 
-def get_best_matched_labels(cls_mapping,logits):
-    """
-    Cls mapping : {actual label: mis-classified labels} - can have multiple key pointing to same value
-    logits : (batch,num_classes)
-    For each sample, find the first match to cls_mapping, if there is multiple keys, randomly pick one
-    """
-    # Create a reverse mapping for keys and values
-    reverse_mapping = defaultdict(list)
-    for key, value in cls_mapping.items():
-        reverse_mapping[key].append(key)   # Add the key itself
-        reverse_mapping[value].append(key)  # Add the key for its value
+# def get_best_matched_labels(cls_mapping,logits):
+#     """
+#     Cls mapping : {actual label: mis-classified labels} - can have multiple key pointing to same value
+#     logits : (batch,num_classes)
+#     For each sample, find the first match to cls_mapping, if there is multiple keys, randomly pick one
+#     """
+#     # Create a reverse mapping for keys and values
+#     reverse_mapping = defaultdict(list)
+#     for key, value in cls_mapping.items():
+#         reverse_mapping[key].append(key)   # Add the key itself
+#         reverse_mapping[value].append(key)  # Add the key for its value
 
-    # Flatten the reverse mapping into arrays for efficient lookup
-    all_match_values = np.array(list(reverse_mapping.keys()))
-    # Create a boolean mask by comparing tensor with all_match_values
-    mask = np.isin(logits, all_match_values)
-    # Find the index of the first match per row
-    first_match_indices = np.argmax(mask, axis=1)
-    # Extract the matched value from the tensor
-    matched_values = logits[np.arange(logits.shape[0]), first_match_indices]
-    # Fetch only the keys corresponding to the first matched value
-    result = [reverse_mapping[val] for val in matched_values]
-    return [np.random.choice(r,1)[0] for r in result]
+#     # Flatten the reverse mapping into arrays for efficient lookup
+#     all_match_values = np.array(list(reverse_mapping.keys()))
+#     # Create a boolean mask by comparing tensor with all_match_values
+#     mask = np.isin(logits, all_match_values)
+#     # Find the index of the first match per row
+#     first_match_indices = np.argmax(mask, axis=1)
+#     # Extract the matched value from the tensor
+#     matched_values = logits[np.arange(logits.shape[0]), first_match_indices]
+#     # Fetch only the keys corresponding to the first matched value
+#     result = [reverse_mapping[val] for val in matched_values]
+#     return [np.random.choice(r,1)[0] for r in result]
 
-def ortho_by_cls(attns,mlps,labels,clip_model,tokenizer,psuedo_labels,cls_mapping,args,class_pos=None): # psuedo_label (batch,num_classes)
-    label_pos = sort_by_label(labels)
-    unique_cls_mapping = get_unique_class_mapping(cls_mapping) # {1:10,...}
-    psuedo_labels = get_best_matched_labels(unique_cls_mapping,psuedo_labels.numpy())
-    label_pos = sort_by_label(psuedo_labels)
+def get_best_matched_labels(cls_mapping, logits):
+    """
+    Finds the best match for pseudo-labels based on the misclassification dictionary.
+
+    Args:
+        cls_mapping (dict): Nested dictionary where outer keys are true labels (within N classes),
+                            and inner dictionaries map misclassified labels to their counts.
+                            Example: {'whale': {'shark': 10, 'dolphin': 5}, ...}
+        logits (np.array): Pseudo-labels for the test set (shape: (batch,)).
+
+    Returns:
+        List[Tuple]: List of (labels within the 45 classes) for each sample in logits.
+    """
+    # Flatten cls_mapping for reverse lookup (from values to keys)
+    reverse_mapping = defaultdict(lambda: defaultdict(int))
+    for true_label, misclassified_dict in cls_mapping.items():
+        for misclassified_label, count in misclassified_dict.items():
+            reverse_mapping[misclassified_label][true_label] += count
+
+    # List of all valid keys (outer keys in cls_mapping)
+    valid_keys = list(cls_mapping.keys())
+
+    # Process each pseudo-label in the logits
+    results = []
+    for pseudo_label in logits.tolist():
+        if pseudo_label in cls_mapping:
+            # Case 1: Pseudo-label is a key in cls_mapping - directly return the key 
+            results.append(pseudo_label)
+        elif pseudo_label in reverse_mapping:
+            # Case 2: Pseudo-label is a value in cls_mapping
+            # Find the outer key (true label) where this misclassification occurs most
+            reverse_dict = reverse_mapping[pseudo_label]
+            best_match = max(reverse_dict, key=reverse_dict.get)
+            results.append(best_match)
+        else:
+            # Case 3: Pseudo-label is neither a key nor a value
+            # Randomly sample a key from cls_mapping
+            random_match = random.choice(valid_keys)
+            results.append(random_match)
+    return results
+
+def ortho_by_cls(attns,mlps,labels,clip_model,tokenizer,psuedo_labels,cls_mapping,misclassified_cls_count,args,class_pos=None): # psuedo_label (batch,num_classes)
+    # label_pos = sort_by_label(labels)
+    # unique_cls_mapping = get_unique_class_mapping(cls_mapping) # {1:10,...}
+    psuedo_labels = get_best_matched_labels(misclassified_cls_count,psuedo_labels)
+
+    label_pos = sort_by_label(psuedo_labels) # speed things by grouping samples based on the psuedo labels
     out_acts,out_labels = [],[]
+
     for p_lab,pos in label_pos.items():
         attn,mlp,label = fetch_by_pos(torch.tensor(pos).long(),attns,mlps,labels)
         if class_pos:
@@ -419,9 +462,9 @@ def main():
                 impt_head_pos[ul.item()] = unbiased_cls_heads[args.model]
         
         ## Get the alternative class for each class on common set
-        ca_mapping = get_alternative_class(attns,mlps,classifier,labels) # in str form
+        top_ca_mapping,full_ca_mapping = get_alternative_class(attns,mlps,classifier,labels) # in str form
         
-        psuedo_labels = ((test_attns.sum(axis = (1,2)) + test_mlps.sum(axis = 1)) @ classifier).argsort(dim=-1,descending=True) # (batch,num_classes)
+        psuedo_labels = ((test_attns.sum(axis = (1,2)) + test_mlps.sum(axis = 1)) @ classifier).argmax(dim=-1) # (batch) - get the psuedo labels
 
         grp_and_overall_perf(test_attns,test_mlps,classifier,test_labels,top_error_pos,ez_avg,ez_gp,print_name = 'Baseline',logger=logger)
 
@@ -431,10 +474,10 @@ def main():
         textspan_test_attns = ablate(test_attns,textspan_cls_heads[args.model],type ='mean') # text span
         grp_and_overall_perf(textspan_test_attns,test_mlps,classifier,test_labels,top_error_pos,ez_avg,ez_gp,print_name = 'Textspan',logger=logger)
 
-        rs_acts,rs_labels,_ = ortho_by_cls(test_attns,test_mlps,test_labels,clip_model,tokenizer,psuedo_labels,ca_mapping,args)
+        rs_acts,rs_labels,_ = ortho_by_cls(test_attns,test_mlps,test_labels,clip_model,tokenizer,psuedo_labels,top_ca_mapping,full_ca_mapping,args)
         grp_and_overall_perf(rs_acts,None,classifier,rs_labels,top_error_pos,ez_avg,ez_gp,print_name = 'Roboshot',logger=logger)
 
-        ltc,ltc_labels,psuedo_pos = ortho_by_cls(ablated_attns,test_mlps,test_labels,clip_model,tokenizer,psuedo_labels,ca_mapping,args,class_pos = impt_head_pos)
+        ltc,ltc_labels,psuedo_pos = ortho_by_cls(ablated_attns,test_mlps,test_labels,clip_model,tokenizer,psuedo_labels,top_ca_mapping,full_ca_mapping,args,class_pos = impt_head_pos)
         grp_and_overall_perf(ltc,None,classifier,ltc_labels,top_error_pos,ez_avg,ez_gp,print_name = 'LTC',logger=logger)
 
         ## For debias, get separate classifiers for each psuedo-class

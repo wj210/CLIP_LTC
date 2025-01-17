@@ -85,7 +85,7 @@ class Genderbias_xl(VisionDataset):
         test_occ = [occ for occ in self.occupations if occ not in val_occ]
 
         ## Get occupation pairing
-        occupation_pairing,occupation_gender = get_occupation_pairing()
+        occupation_pairing,occupation_gender,_ = get_occupation_pairing()
 
         split_occ = val_occ if split == 'val' else test_occ
         self.img = []

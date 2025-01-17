@@ -93,13 +93,17 @@ def rs_ortho(test_proj,clip_model,tokenizer,dataset,device='cuda',mode='both',cl
         elif dataset == 'genderbias':
             match_keys = [(f'{target_class[0]}_{target_class[1]}'),(f'{target_class[1]}_{target_class[0]}')]
             taken = False
+            
             for mk in match_keys:
-                if mk in reject_text:
+                if len(reject_text.get(mk,[])) and len(accept_text.get(mk,[])):
                     reject_text,accept_text = reject_text[mk],accept_text[mk]
                     taken=True
                     break
             if not taken:
-                rand_key = np.random.choice(list(reject_text.keys()))
+                non_empty_reject_keys = [k for k in reject_text.keys() if target_class[0] in k or target_class[1] in k]
+                non_empty_accept_keys = [k for k in accept_text.keys() if target_class[0] in k or target_class[1] in k]
+                keys_to_sample = list(set(non_empty_reject_keys).intersection(set(non_empty_accept_keys)))
+                rand_key = np.random.choice(keys_to_sample)
                 reject_text,accept_text = reject_text[rand_key],accept_text[rand_key]
         else:
             raise ValueError('Target class not found in dataset')
@@ -177,34 +181,42 @@ def store_and_load_attributes(dataset,classes=None,model_name=None):
             pairing = classes
             all_cls = list(classes.keys())
         
-        err = 0
         for c in tqdm(all_cls,desc = 'Generating reject/accept'):
+            num_tries = 0
             if c == 'Waitress':
                 continue
             other_c = pairing[c]
             text_mapping = {'cls1':c,'cls2':other_c}
-            try:
-                r_text = get_z_prompts(dataset,text_prompts[dataset]['question_reject'].format_map(text_mapping),n_paraphrases=0,text_mapping=text_mapping)
-                a_text = get_z_prompts(dataset,text_prompts[dataset]['question_accept'].format_map(text_mapping),n_paraphrases=0,text_mapping=text_mapping)
-                if isinstance(reject_text,list):
-                    reject_text += r_text 
-                    accept_text += a_text
-                else:
-                    reject_text[f"{c}_{other_c}"] = r_text
-                    accept_text[f"{c}_{other_c}"] = a_text
-            except Exception as e:
-                print (e)
-                err += 1
-                continue
+            r_text,a_text = [],[]
+            while (not len(r_text) or not len(a_text)) and num_tries <= 3:
+                try:
+                    r_text = get_z_prompts(dataset,text_prompts[dataset]['question_reject'].format_map(text_mapping),n_paraphrases=0,text_mapping=text_mapping)
+                    a_text = get_z_prompts(dataset,text_prompts[dataset]['question_accept'].format_map(text_mapping),n_paraphrases=0,text_mapping=text_mapping)
+                    if isinstance(reject_text,list):
+                        reject_text += r_text 
+                        accept_text += a_text
+                    else:
+                        if dataset == 'genderbias':
+                            reject_text[f"{c}_{other_c}"] = r_text
+                            accept_text[f"{c}_{other_c}"] = a_text
+                        elif dataset == 'counteranimal':
+                            reject_text[c] = r_text
+                            accept_text[c] = a_text
+                    break
+
+                except Exception as e:
+                    num_tries += 1
+                    if num_tries > 3: # try 3 times
+                        break
         with open(path, "w") as f:
             json.dump({'reject':reject_text,'accept':accept_text},f)
-        print (err)
+
     return reject_text,accept_text
 
 
 def get_z_prompts(dataset_name, question, n_paraphrases=1, max_tokens=100,text_mapping = {}):
     #step 1
-    resp_visible_differences = openai_call(question, max_tokens=max_tokens)
+    resp_visible_differences = openai_call(question, max_tokens=max_tokens,temperature=0.5)
     #step 2
     kv_dict = items_to_list(resp_visible_differences, dataset_name,text_mapping=text_mapping)
     #step 4

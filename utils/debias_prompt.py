@@ -4,6 +4,7 @@ import torch
 from dataset.genderbias_xl import occupations
 from dataset.fairface import concepts
 from dataset.imagenet_classes import imagenet_classes
+from itertools import combinations
 
 """
 From https://github.com/chingyaoc/debias_vl, Debiasing Vision-Language Models via Biased Prompts 
@@ -75,7 +76,7 @@ def get_proj_matrix(embeddings):
 def debias_text_prompt(model,tokenizer,device,text_embeddings,dataset,lam=1000.,classes=None): # candidate text only for genderbias (occup)
     spurious_embeddings = get_embeddings(spurious_prompts[dataset],model,tokenizer,device)
     P0 = get_proj_matrix(spurious_embeddings.numpy())
-    if dataset in ['genderbias','fairface','visogender']:
+    if dataset in ['genderbias','fairface','visogender','counteranimal']:
         template = candidate_prompts[dataset]
         candidate_texts = []
         S_ = []
@@ -92,7 +93,8 @@ def debias_text_prompt(model,tokenizer,device,text_embeddings,dataset,lam=1000.,
 
         for t in val_occ_:
             candidate_texts.extend([temp.format(t) for temp in template])
-            S_ += [[counter, counter+1]]
+            S_ += list(combinations(range(counter,counter+len(template)),2))
+            counter += len(template)
     else:
         candidate_texts = candidate_prompts[dataset]
         S_ = S[dataset]
