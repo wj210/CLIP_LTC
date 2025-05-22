@@ -66,3 +66,6 @@ For Image, you have to re-run `compute_prs.py` but with `visualize_img` flag, th
 ```python
 python viz_img.py --dataset genderbias --model ViT-B-16
 ```
+
+# Parameter-tuning
+For ERM/JTT/JTC probe in Waterbirds, run `notebooks/probe.ipynb`.
