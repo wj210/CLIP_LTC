@@ -103,6 +103,7 @@ def get_args_parser():
     )
     parser.add_argument("--device", default="cuda:0", help="device to use for testing")
     parser.add_argument("--test",action = 'store_true', help="test or val set")
+    parser.add_argument("--val",action = 'store_true', help="test or val set")
     parser.add_argument("--visualize_img",action = 'store_true', help="test or val set")
 
     return parser
@@ -121,7 +122,11 @@ def main(args):
     context_length = model.context_length
     vocab_size = model.vocab_size
     os.makedirs(args.output_dir+f'/{args.dataset}', exist_ok=True)
-    save_path = os.path.join(args.output_dir, args.dataset,f"{args.model}{'_test' if args.test  else ''}.pkl")
+    save_path = os.path.join(args.output_dir, args.dataset,f"{args.model}.pkl")
+    if args.test:
+        save_path = save_path.replace('.pkl','_test.pkl')
+    elif args.val:
+        save_path = save_path.replace('.pkl','_val.pkl')
     
     if args.visualize_img:
         save_path = save_path.replace('.pkl','_viz.pkl')

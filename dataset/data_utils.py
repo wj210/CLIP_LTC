@@ -11,7 +11,13 @@ def load_ds(args,preprocess):
     if args.dataset == "imagenet":
         ds = ImageNet(root=f'{root}', split="test" if args.test else 'val', transform=preprocess)
     elif args.dataset == "binary_waterbirds":
-        ds = BinaryWaterbirds(root=f'{root}/waterbirds/waterbird_complete95_forest2water2', split="test" if args.test or args.visualize_img else 'train', transform=preprocess,return_filename=args.visualize_img)
+        if args.test:
+            split = 'test'
+        elif args.val:
+            split = 'valid'
+        else:
+            split = 'train'
+        ds = BinaryWaterbirds(root=f'{root}/waterbirds/waterbird_complete95_forest2water2', split=split, transform=preprocess,return_filename=args.visualize_img)
         if args.visualize_img:
             ds = FilteredWB(ds)
     elif args.dataset == 'celeba':

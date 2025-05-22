@@ -23,13 +23,14 @@ def get_group_perf(attns,mlps,classifier,labels,grp_labels,grp_counts,type_ = 'b
             baseline_logits = ((attns.sum(axis = (1,2)) + mlps.sum(axis = 1)) @ classifier).float()
     else:
         baseline_logits = attns
-    baseline_pred = torch.argmax(baseline_logits,dim=1)
+    baseline_pred = torch.argmax(baseline_logits,dim=1).detach().cpu()
     if grp_mapping: # means classifier is group prompt, grp_mapping = {grp_label:label}
         baseline_pred = grp_mapping(baseline_pred)
 
     correct_pos = (baseline_pred == labels).nonzero(as_tuple=True)[0]
     if grp_labels is not None and grp_counts is not None:
         gp_perf = defaultdict(int)
+        # gp_perf = {k:0 for k in grp_counts.keys()}
         for gp in grp_labels[correct_pos]:
             gp_perf[gp.item()] += 1
         for g_name in sorted(list(gp_perf.keys())):
@@ -51,11 +52,17 @@ def get_group_perf(attns,mlps,classifier,labels,grp_labels,grp_counts,type_ = 'b
             print (m)
     return gp_perf
 
-def load_bg_ds(dataset,model,input_dir,test=False):
+def load_bg_ds(dataset,model,input_dir,test = False,val=False):
     grp_labels = None
     grp_counts=None
     place_labels = None
-    with open(os.path.join(input_dir,dataset, f"{model}{'_test' if test else ''}.pkl"),'rb') as f:
+    if test:
+        split = '_test'
+    elif val:
+        split = '_val'
+    else:
+        split = ''
+    with open(os.path.join(input_dir,dataset, f"{model}{split}.pkl"),'rb') as f:
         loaded_d = pickle.load(f)
     attns = torch.from_numpy(loaded_d['attn'])
     mlps = torch.from_numpy(loaded_d['mlp'])
@@ -237,14 +244,32 @@ biased_cls_heads = {
                 'ViT-L-14':[(23,14),(23,5)],
             'ViT-H-14': [(30,11),(31,6)],
                 }
-unbiased_cls_heads = {'ViT-B-16':[(11,5),(10,2)],
+
+pred_biased_cls_heads = {
+    'ViT-B-16':[(10, 10), (11, 3), (11, 6)],
+    'ViT-L-14':[(23, 5)],
+    'ViT-H-14':[(30, 11), (31, 6), (31, 12)]
+}
+
+# Use S label #
+unbiased_cls_heads = {
+                        'ViT-B-16':[(11,5),(10,2)],
                       'ViT-L-14':[(23,2)],
                       'ViT-H-14':[(30,8),(31,2),(31,1),(31,13)]
                       }
+
+pred_unbiased_cls_heads = {
+    'ViT-B-16':[(11,5)],
+    'ViT-L-14':[(23,2)],
+    'ViT-H-14':[(31, 2), (31, 13), (31, 1), (29, 9), (29, 12), (30, 8), (31, 10)]
+}
+
 ## TextSpan
-biased_bg_heads = {'ViT-B-16':[(11,6),(10,10),(11,3),(11,5),(11,0)],
+biased_bg_heads = {
+                'ViT-B-16':[(11,6),(10,10),(11,3),(11,5),(11,0)],
                 'ViT-L-14':[(22,12),(23,6),(22,2),(23,3),(23,2),(23,5)],
-                'ViT-H-14':[(30,11),(28,11),(31,8),(31,2)]}
+                'ViT-H-14':[(30,11),(28,11),(31,8),(31,2)]
+                }
 
 textspan_cls_heads = {
         'ViT-B-16':[(11, 3), (10, 11), (10, 10), (9, 8), (9, 6),(11, 6), (11, 0)],
@@ -299,9 +324,8 @@ def main():
         attns,mlps,classifier,labels,grp_labels,grp_counts,place_label = load_bg_ds(args.dataset,args.model,input_dir)
 
         all_layer_heads = [(layer,head) for layer in range(attns.shape[1]-4,attns.shape[1]) for head in range(attns.shape[2])] # to select for random
-        get_group_perf(attns,mlps,classifier,labels,grp_labels,grp_counts,type_ = 'val baseline')
-
-        ## Get biased heads for background
+        val_gp = get_group_perf(attns,mlps,classifier,labels,grp_labels,grp_counts,type_ = 'val baseline')
+ 
         correct_pos,wrong_pos,baseline_pred,other_labels = get_correct_wrong(attns,mlps,classifier,labels)
         biased_correct,biased_wrong = get_biased_pos(wb_biased_grps,grp_labels,correct_pos,wrong_pos) # biased correct or wrong
 
@@ -316,9 +340,12 @@ def main():
         impt_head_pos = get_impt_heads(gn_wrong,gn_correct)
         plot_heatmap({'correct':gn_correct.numpy(),'wrong':gn_wrong.numpy()},f'test_imgs/importance/{args.model}_{args.dataset}.png',heads_from = plot_layers[args.model])
 
+        # Full bias part.
         full_bias = get_impt_heads(full_correct,full_wrong)
         full_impt = get_impt_heads(full_wrong,full_correct)
         plot_heatmap({'correct':full_correct.numpy(),'wrong':full_wrong.numpy()},f'test_imgs/importance/{args.model}_{args.dataset}_full.png',heads_from = plot_layers[args.model])
+        print (f'Biased heads: {bias_head_pos}')
+        print (f'Impt heads: {impt_head_pos}')
 
 
         ## Test
@@ -378,6 +405,8 @@ def main():
                 grp_info['GP'].append(i)
         grp_info = {k:torch.tensor(v) for k,v in grp_info.items()}
         plot_margin_by_grp(margin_stuff,test_labels,grp_info,args.dataset,args.model)
+
+        ## end margin
 
         for k,v in all_activations.items():
             class_emb = classifier if k.lower() != 'ortho' else debiased_classifier
@@ -450,10 +479,10 @@ def main():
         ## Get Z_Y for each class
         correct_pos,wrong_pos,baseline_pred,other_labels = get_correct_wrong(attns,mlps,classifier,labels)
 
-        impt_head_pos = {}
+        impt_head_pos = {} # for Z_Y we directly get without contrastive.
         for ul in grp_labels.unique():
             correct_l_pos,_ = get_biased_pos([ul],grp_labels,correct_pos,wrong_pos)
-            if len(correct_l_pos) == 0:
+            if len(correct_l_pos) == 0: 
                 impt_head_pos[ul.item()] = unbiased_cls_heads[args.model]
                 continue
             correct_counts = get_counts(attns,mlps,baseline_pred,classifier,correct_l_pos,other_labels)

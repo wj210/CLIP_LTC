@@ -7,6 +7,7 @@ import pandas as pd
 import os
 import pickle
 import logging
+from dataset.cub_classes import place_classes
 
 def change_str_head(x):
     return tuple(map(int,x.split('_')))
@@ -45,7 +46,7 @@ def get_logger(filename):
 
     return logger
 
-def plot_heatmap(x,savepath,heads_from=-1):
+def plot_heatmap(x,savepath=None,heads_from=-1):
     if len(x) > 1:
         fig, axes = plt.subplots(len(x),1,sharey=True,figsize=(12, 6))
         for i,(title,value) in enumerate(x.items()):
@@ -71,7 +72,10 @@ def plot_heatmap(x,savepath,heads_from=-1):
             cbar.ax.tick_params(labelsize=14)
 
     plt.tight_layout()
-    plt.savefig(savepath)
+    if savepath is not None:
+        plt.savefig(savepath)
+    else:
+        plt.show()
 
 def plot_bar(x,savepath):
     if len(x) > 1:
@@ -222,16 +226,17 @@ def get_cls_diff(x,labels,other_labels=None,take_cls_diff=True):
     else:
         return label_values
     
-def get_impt_heads(c,w=None,find=False): # c is the correct matrix, w is wrong. if w is None, then just find the important heads for a concept
+def get_impt_heads(c,w=None,find=False,buffer=0): # c is the correct matrix, w is wrong. if w is None, then just find the important heads for a concept
     num_layer,num_head = c.shape[0],c.shape[1]
     head_layer_names = [(i,j) for i in range(num_layer) for j in range(num_head)]
     if w is not None:
         vals = w.flatten() - c.flatten()
-        num_nonzero = torch.cat([(w.flatten() > 0).nonzero(as_tuple=True)[0],(c.flatten() > 0).nonzero(as_tuple=True)[0]]).unique().shape[0] 
+        num_nonzero = torch.cat([(w.flatten() > buffer).nonzero(as_tuple=True)[0],(c.flatten() > buffer).nonzero(as_tuple=True)[0]]).unique().shape[0] 
     else:
-        num_nonzero = len((c.flatten() >0).nonzero(as_tuple=True)[0])
+        num_nonzero = len((c.flatten() >buffer).nonzero(as_tuple=True)[0])
         vals = c.flatten()
     crit = 1/num_nonzero
+
     if find: # only used for ablation.
         impt_pos = []
         tries = 0
@@ -241,6 +246,8 @@ def get_impt_heads(c,w=None,find=False): # c is the correct matrix, w is wrong. 
             crit /= 2
     else:
         impt_pos = (vals > crit).nonzero(as_tuple=True)[0].tolist()
+
+
     impt_vals = vals[impt_pos]
     # sort impt_pos by the importance values
     impt_pos = [x for _,x in sorted(zip(impt_vals,impt_pos),reverse=True)]
@@ -259,3 +266,20 @@ def load_edit_data(output_dir,dataset,model):
         with open(total_path, "rb") as f:
             total = torch.from_numpy(pickle.load(f))
     return indirect,total
+
+
+def pred_grp_label(attns,mlps,clip_model,tokenizer,ds,grp_labels,class_labels):
+    img_pre = attns.sum(axis=(1,2)) + mlps.sum(axis=1)
+    if ds == 'binary_waterbirds':
+        # classifier_texts = [f"A photo of {p.replace('_', ' ')}" for p in place_classes]
+        classifier_texts = [f"A photo of a {p}" for p in ['land background','water background']]
+    else:
+        classifier_texts = ['A photo of a female','A photo of a male']
+    
+    classifier = torch.nn.functional.normalize(clip_model.encode_text(tokenizer(classifier_texts).to('cuda')),dim=-1).T.detach().cpu()
+    spurious_pred = (img_pre @ classifier).argmax(dim=1)
+    grp_pred = (class_labels * 2) + spurious_pred
+    acc = (grp_pred == grp_labels).float().mean().item()
+    grp_counts = torch.bincount(grp_pred,minlength = torch.max(grp_labels)+1)
+    grp_counts = {k:v for k,v in enumerate(grp_counts)}
+    return grp_pred,grp_counts,acc

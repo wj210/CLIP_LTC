@@ -16,9 +16,35 @@ z_reject = {'binary_waterbirds': [['a bird with aquatic habitat', 'a bird with t
             'celeba':[['a person with dark skin tone', 'a person with light skin tone'], ['a person with angular strong facial features', 'a person with soft round facial features'], ['a person with high perceived attractiveness', 'a person with low perceived attractiveness'], ['a person with serious personality traits', 'a person with loving personality traits'], ['a person with high intelligence', 'a person with low intelligence'], ['a person with high confidence level', 'a person with low confidence level'], ['a person with a deep complexion.', 'a person with a fair complexion.'], ['a person with sharp, prominent facial features', 'a person with a gentle, rounded face'], ['an individual with deep-seated character', 'a person who is caring and kind.'], ['a highly intelligent individual.', 'a person of limited mental capacity.'], ['a person who is sure of themselves.', 'a person who lacks self-assurance']]
             }
 
-z_accept = {'binary_waterbirds': [['a bird with webbed feet', 'a bird with talons feet'], ['a bird with waterproof feathers', 'a bird with non-waterproof feathers'], ['a bird with larger size', 'a bird with smaller size'], ['a bird with darker color', 'a bird with lighter color'], ['a bird with longer bill', 'a bird with shorter bill'], ['a bird with wide beaks', 'a bird with narrow beaks']],
-            'celeba':[['a person with dark hair', 'a person with blond hair'],['a person with coarse hair texture', 'a person with smooth hair texture'], ['a person with lighter eye color', 'a person with darker eye color']]
-            }
+# z_accept = {'binary_waterbirds': [['a bird with webbed feet', 'a bird with talons feet'], ['a bird with waterproof feathers', 'a bird with non-waterproof feathers'], ['a bird with larger size', 'a bird with smaller size'], ['a bird with darker color', 'a bird with lighter color'], ['a bird with longer bill', 'a bird with shorter bill'], ['a bird with wide beaks', 'a bird with narrow beaks']],
+#             'celeba':[['a person with dark hair', 'a person with blond hair'],['a person with coarse hair texture', 'a person with smooth hair texture'], ['a person with lighter eye color', 'a person with darker eye color']]
+#             }
+
+z_accept = {'binary_waterbirds': [
+    [['a bird with webbed feet', 'a bird with talons feet'], 
+     ['a bird with waterproof feathers', 'a bird with non-waterproof feathers'], 
+     ['a bird with larger size', 'a bird with smaller size'], 
+     ['a bird with darker color', 'a bird with lighter color'], 
+     ['a bird with longer bill', 'a bird with shorter bill'], 
+     ['a bird with wide beaks', 'a bird with narrow beaks']],
+     
+    [['a bird whose feet are specialized for swimming', 'a bird whose feet are specialized for grasping'],
+    ['a bird with feathers designed to repel water', 'a bird with feathers that easily absorb water'],
+    ['a bird typically larger in body size', 'a bird typically smaller in body size'],
+    ['a bird with predominantly darker feathers', 'a bird with predominantly lighter feathers'],
+    ['a bird possessing a notably longer beak', 'a bird possessing a notably shorter beak'],
+    ['a bird with a broader-shaped beak', 'a bird with a narrower-shaped beak']
+],
+[
+    ['a bird with swimming-friendly feet', 'a bird with perching-friendly feet'],
+    ['a bird equipped with feathers that repel water', 'a bird equipped with feathers that absorb water'],
+    ['a bird characterized by bigger body size', 'a bird characterized by smaller body size'],
+    ['a bird with plumage of deeper shades', 'a bird with plumage of paler shades'],
+    ['a bird having a lengthened bill', 'a bird having a compact bill'],
+    ['a bird possessing wider beaks', 'a bird possessing thinner beaks']
+]
+                                  ],}
+
 
 text_prompts = {
     'binary_waterbirds': {
@@ -73,13 +99,13 @@ text_prompts = {
 imagenet_pairing = {'ostrich': 'water buffalo', 'brambling': 'American robin', 'bulbul': 'American robin', 'American dipper': 'box turtle', 'vulture': 'kite (bird of prey)', 'American bullfrog': 'tree frog', 'loggerhead sea turtle': 'leatherback sea turtle', 'green iguana': 'stone wall', 'desert grassland whiptail lizard': 'European green lizard', 'agama': 'desert grassland whiptail lizard', 'Nile crocodile': 'American alligator', 'eastern hog-nosed snake': 'eastern diamondback rattlesnake', 'kingsnake': 'garter snake', 'garter snake': 'eastern diamondback rattlesnake', 'water snake': 'eel', 'harvestman': 'wolf spider', 'scorpion': 'cricket insect', 'centipede': 'cockroach', 'black grouse': 'prairie grouse', 'ptarmigan': 'prairie grouse', 'prairie grouse': 'ruffed grouse', 'sulphur-crested cockatoo': 'great egret', 'black swan': 'American alligator', 'echidna': 'badger', 'black stork': 'white stork', 'flamingo': 'white stork', 'bittern bird': 'little blue heron', 'pelican': 'white stork', 'sea lion': 'loggerhead sea turtle', 'hyena': 'African wild dog', 'red fox': 'kit fox', 'Arctic fox': 'Alaskan tundra wolf', 'jaguar': 'leopard', 'lion': 'African wild dog', 'cheetah': 'hyena', 'dung beetle': 'rhinoceros beetle', 'cicada': 'cricket insect', 'beaver': 'otter', 'bighorn sheep': 'Alpine ibex', 'mink': 'European polecat', 'otter': 'sea lion'}
 
 
-def rs_ortho(test_proj,clip_model,tokenizer,dataset,device='cuda',mode='both',classes=None,model_name=None,target_class = None):
+def rs_ortho(test_proj,clip_model,tokenizer,dataset,device='cuda',mode='both',classes=None,model_name=None,target_class = None,accept_no=0):
     assert mode in ['both','reject','accept']
     reject_emb = []
     accept_emb = []
 
     reject_text = z_reject.get(dataset,None)
-    accept_text = z_accept.get(dataset,None)
+    accept_text = z_accept.get(dataset,None)[accept_no]
     if reject_text is None or accept_text is None:
         reject_text,accept_text = store_and_load_attributes(dataset,classes=classes,model_name=model_name)
 
