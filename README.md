@@ -69,3 +69,15 @@ python viz_img.py --dataset genderbias --model ViT-B-16
 
 # Parameter-tuning
 For ERM/JTT/JTC probe in Waterbirds, run `notebooks/probe.ipynb`.
+
+
+# Citation
+Please consider citing our work if you found it useful!
+
+```bibtex
+@article{yeo2025debiasing,
+  title={Debiasing CLIP: Interpreting and Correcting Bias in Attention Heads},
+  author={Yeo, Wei Jie and Mao, Rui and Abdar, Moloud and Cambria, Erik and Satapathy, Ranjan},
+  journal={arXiv preprint arXiv:2505.17425},
+  year={2025}
+}
