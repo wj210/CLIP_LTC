@@ -1,4 +1,4 @@
-# Debiasing CLIP: Interpreting and Correcting Bias in Attention Heads
+# Debiasing CLIP: Interpreting and Correcting Bias in Attention Heads [ICML 2026]
 
 ![Alt text](images/overall.png)
 
